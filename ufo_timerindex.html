@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UFO TIMER</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --space:   #0d1b2a;
+    --deep:    #060e18;
+    --purple:  #9d4edd;
+    --cyan:    #00f5ff;
+    --pink:    #ff006e;
+    --gold:    #ffd60a;
+    --white:   #e8f4ff;
+    --muted:   rgba(0,245,255,.5);
+    --glow:    0 0 12px rgba(0,245,255,.6);
+  }
+
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--space);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    color: var(--white);
+    user-select: none;
+    position: relative;
+  }
+
+  /* ── CANVAS STARFIELD ── */
+  #bg-canvas {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+
+  /* ── NEBULA ── */
+  .nebula {
+    position: fixed; border-radius: 50%; filter: blur(80px);
+    pointer-events: none; z-index: 0;
+    animation: nebula-drift 20s ease-in-out infinite;
+  }
+  @keyframes nebula-drift {
+    0%,100%{ transform: translate(0,0) scale(1); }
+    33%    { transform: translate(30px,-20px) scale(1.05); }
+    66%    { transform: translate(-20px,30px) scale(.95); }
+  }
+
+  /* ── MAIN LAYOUT: UFO 左 + タイマー 右 ── */
+  #main {
+    position: relative; z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 16px 20px 4px;
+    min-height: 0;
+    flex: 1;
+  }
+
+  /* ── UFO SECTION (猫セクション代替) ── */
+  #cat-section {
+    flex-shrink: 0;
+    position: relative;
+    width: 46vh; height: 46vh;
+    min-width: 140px; min-height: 140px;
+  }
+
+  /* プログレスリング */
+  #progress-ring {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+    overflow: visible;
+  }
+  #ring-bg {
+    fill: none;
+    stroke: rgba(0,245,255,.15);
+    stroke-width: 6;
+  }
+  #ring-fill {
+    fill: none;
+    stroke: var(--cyan);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 1s linear;
+    filter: drop-shadow(0 0 6px rgba(0,245,255,.8));
+  }
+
+  /* UFO SVG */
+  #cat-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    z-index: 2;
+    filter: drop-shadow(0 0 18px rgba(0,245,255,.4));
+    animation: ufo-hover 3s ease-in-out infinite;
+    transform-origin: center;
+  }
+  #cat-img.running {
+    animation: ufo-excited .5s ease-in-out infinite;
+    filter: drop-shadow(0 0 30px rgba(0,245,255,.9));
+  }
+  @keyframes ufo-hover {
+    0%,100% { transform: translateY(0) rotate(-1deg); }
+    50%     { transform: translateY(-8px) rotate(1deg); }
+  }
+  @keyframes ufo-excited {
+    0%,100% { transform: translateY(0) rotate(-3deg) scale(1); }
+    25%     { transform: translateY(-10px) rotate(4deg) scale(1.03); }
+    75%     { transform: translateY(-5px) rotate(-2deg) scale(1.01); }
+  }
+
+  /* 軌道ドット */
+  #orbit-dot {
+    position: absolute;
+    width: 12px; height: 12px;
+    background: var(--cyan);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 3;
+    display: none;
+    box-shadow: 0 0 12px rgba(0,245,255,.9), 0 0 24px rgba(0,245,255,.4);
+    top: 0; left: 0;
+    animation: orbit-pulse .8s ease-in-out infinite;
+  }
+  @keyframes orbit-pulse {
+    0%,100% { transform: scale(1); }
+    50%     { transform: scale(1.4); }
+  }
+
+  /* ── TIMER SECTION ── */
+  #timer-section {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  #timer-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .digit-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .adj-btn {
+    background: rgba(0,245,255,.08);
+    border: 1.5px solid rgba(0,245,255,.4);
+    border-radius: 50%;
+    width: 34px; height: 34px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px; font-weight: 700;
+    color: var(--cyan);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+    line-height: 1;
+  }
+  .adj-btn:hover {
+    background: rgba(0,245,255,.2);
+    box-shadow: var(--glow);
+    transform: scale(1.1);
+  }
+  .adj-btn:active { transform: scale(.93); }
+
+  .digits-row { display: flex; }
+
+  .digit {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(52px, 10vw, 112px);
+    font-weight: 900;
+    color: var(--cyan);
+    line-height: 1;
+    min-width: 0.58em;
+    text-align: center;
+    letter-spacing: -0.03em;
+    text-shadow: 0 0 20px rgba(0,245,255,.8), 0 0 40px rgba(0,245,255,.4);
+    transition: color 0.3s;
+  }
+  .digit.dim {
+    color: rgba(0,245,255,.2);
+    text-shadow: none;
+  }
+
+  .colon {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(52px, 10vw, 112px);
+    font-weight: 900;
+    color: rgba(0,245,255,.5);
+    line-height: 1;
+    margin: 0 2px;
+    align-self: center;
+    padding-bottom: 4px;
+    animation: colon-blink 1s step-start infinite;
+  }
+  @keyframes colon-blink {
+    0%,49%{ opacity: 1; }
+    50%,100%{ opacity: .2; }
+  }
+
+  #unit-labels {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -2px;
+  }
+  .unit-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-align: center;
+    min-width: calc(clamp(52px, 10vw, 112px) * 1.16);
+    text-transform: uppercase;
+  }
+  .unit-sep { min-width: 22px; }
+
+  /* ── BOTTOM PANEL ── */
+  #bottom-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px 14px;
+    position: relative; z-index: 1;
+  }
+
+  #controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-btn {
+    background: rgba(0,245,255,.06);
+    border: 1.5px solid rgba(0,245,255,.35);
+    border-radius: 50px;
+    padding: 9px 22px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: var(--cyan);
+    cursor: pointer;
+    transition: all .15s;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .ctrl-btn:hover {
+    background: rgba(0,245,255,.15);
+    box-shadow: var(--glow);
+    transform: translateY(-2px);
+  }
+  .ctrl-btn:active { transform: scale(.96); }
+
+  #start-btn {
+    background: linear-gradient(135deg, var(--purple), var(--cyan));
+    color: var(--space);
+    border-color: transparent;
+    box-shadow: 0 0 20px rgba(0,245,255,.35), 0 4px 14px rgba(157,78,221,.4);
+    animation: btn-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes btn-pulse {
+    0%,100%{ box-shadow: 0 0 20px rgba(0,245,255,.35), 0 4px 14px rgba(157,78,221,.4); }
+    50%    { box-shadow: 0 0 36px rgba(0,245,255,.7), 0 4px 20px rgba(157,78,221,.6); }
+  }
+  #start-btn:hover { transform: translateY(-2px) scale(1.04); animation: none; box-shadow: 0 0 40px rgba(0,245,255,.8); }
+
+  #clear-btn { border-color: rgba(255,0,110,.5); color: var(--pink); }
+  #clear-btn:hover { background: rgba(255,0,110,.12); box-shadow: 0 0 12px rgba(255,0,110,.5); }
+
+  #presets {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .preset-btn {
+    background: rgba(0,245,255,.05);
+    color: var(--muted);
+    border: 1px solid rgba(0,245,255,.25);
+    border-radius: 50px;
+    padding: 5px 14px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; font-weight: 700;
+    cursor: pointer;
+    transition: all .12s;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .preset-btn:hover {
+    background: rgba(0,245,255,.14);
+    color: var(--cyan);
+    box-shadow: var(--glow);
+    transform: translateY(-2px);
+  }
+  .preset-btn:active { transform: translateY(0) scale(.96); }
+
+  #custom-input-wrap {
+    display: flex; align-items: center; gap: 4px;
+  }
+  #custom-input {
+    width: 62px;
+    border: 1.5px solid rgba(0,245,255,.35);
+    border-radius: 50px;
+    padding: 5px 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; font-weight: 700;
+    color: var(--cyan);
+    background: rgba(0,245,255,.06);
+    text-align: center;
+    outline: none;
+  }
+  #custom-input::placeholder { color: rgba(0,245,255,.3); }
+  #custom-input:focus { border-color: var(--cyan); box-shadow: var(--glow); }
+  #custom-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase; letter-spacing: .1em;
+  }
+  #custom-set-btn {
+    background: rgba(157,78,221,.3);
+    color: var(--white);
+    border: 1px solid rgba(157,78,221,.5);
+    border-radius: 50px;
+    padding: 5px 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; font-weight: 700;
+    cursor: pointer;
+    transition: all .12s;
+    text-transform: uppercase;
+  }
+  #custom-set-btn:hover {
+    background: rgba(157,78,221,.5);
+    box-shadow: 0 0 12px rgba(157,78,221,.5);
+    transform: translateY(-1px);
+  }
+
+  /* ── LAYOUT WRAPPER ── */
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ── OVERLAY ── */
+  #overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.85);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+    backdrop-filter: blur(8px);
+  }
+  #overlay.show { display: flex; }
+
+  @keyframes popIn {
+    0%   { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+    70%  { transform: scale(1.08) rotate(3deg); }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  /* オーバーレイ時UFO */
+  #overlay-cat {
+    width: 160px;
+    animation: popIn .55s cubic-bezier(.34,1.56,.64,1) forwards;
+    filter: drop-shadow(0 0 20px rgba(0,245,255,.8));
+  }
+
+  #overlay-card {
+    background: rgba(6,14,24,.95);
+    border: 2px solid var(--cyan);
+    border-radius: 24px;
+    padding: 20px 44px;
+    text-align: center;
+    animation: popIn .55s .1s cubic-bezier(.34,1.56,.64,1) both;
+    box-shadow: 0 0 40px rgba(0,245,255,.4);
+  }
+  #overlay-text {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 26px;
+    color: var(--cyan);
+    text-shadow: 0 0 20px rgba(0,245,255,.8);
+    letter-spacing: .08em;
+  }
+  #overlay-sub {
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 700;
+    margin-top: 4px;
+    letter-spacing: .05em;
+  }
+
+  #dismiss-btn {
+    background: linear-gradient(135deg, var(--purple), var(--cyan));
+    color: var(--space);
+    border: none;
+    border-radius: 50px;
+    padding: 12px 44px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px; font-weight: 900;
+    cursor: pointer;
+    animation: popIn .55s .2s cubic-bezier(.34,1.56,.64,1) both;
+    box-shadow: 0 0 24px rgba(0,245,255,.5);
+    transition: all .15s;
+    text-transform: uppercase;
+  }
+  #dismiss-btn:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 40px rgba(0,245,255,.8); }
+
+  @keyframes flashOverlay {
+    0%,100% { background: rgba(0,0,0,.85); }
+    50%     { background: rgba(0,245,255,.12); }
+  }
+  #overlay.show { animation: flashOverlay .9s 0s 3; }
+
+  /* warp ripple */
+  .warp-ripple {
+    position: fixed; left: 50%; top: 50%;
+    border-radius: 50%;
+    border: 3px solid var(--cyan);
+    pointer-events: none; z-index: 90;
+    animation: warp-expand 1s ease-out forwards;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 20px rgba(0,245,255,.5);
+  }
+  @keyframes warp-expand {
+    0%  { width:0; height:0; opacity:1; border-color: var(--cyan); }
+    50% { border-color: var(--purple); }
+    100%{ width:200vmax; height:200vmax; opacity:0; border-color: var(--pink); }
+  }
+
+  /* ワープライン */
+  .warp-line {
+    position: fixed; top: 50%; left: 50%;
+    height: 1px; transform-origin: left center;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0; pointer-events: none; z-index: 2;
+  }
+  .warp-line.active { animation: warp-shoot .6s ease-out forwards; }
+  @keyframes warp-shoot {
+    0%  { opacity:0; width:0; }
+    20% { opacity:.9; }
+    100%{ opacity:0; width:60vw; }
+  }
+  #warp-layer { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+
+  /* meteor */
+  .meteor {
+    position: fixed; pointer-events: none; z-index: 2;
+    height: 2px; border-radius: 1px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+    animation: meteor-fly var(--dur,.8s) linear forwards;
+    opacity: 0;
+  }
+  @keyframes meteor-fly {
+    0%  { opacity:0; width:0; }
+    10% { opacity:1; }
+    80% { opacity:.8; }
+    100%{ opacity:0; width:var(--mw,150px); transform:translate(var(--tx),var(--ty)); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div id="warp-layer"></div>
+
+<!-- nebula -->
+<div class="nebula" style="background:rgba(157,78,221,.28);left:10%;top:15%;width:240px;height:240px;animation-delay:0s;"></div>
+<div class="nebula" style="background:rgba(0,245,255,.15);left:72%;top:55%;width:300px;height:300px;animation-delay:4s;"></div>
+<div class="nebula" style="background:rgba(255,0,110,.12);left:50%;top:75%;width:180px;height:180px;animation-delay:8s;"></div>
+
+<!-- MAIN: UFO + タイマー -->
+<div id="main">
+
+  <div id="cat-section">
+    <svg id="progress-ring" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <circle id="ring-bg"   cx="100" cy="100" r="94"/>
+      <circle id="ring-fill" cx="100" cy="100" r="94"/>
+    </svg>
+    <div id="orbit-dot"></div>
+
+    <!-- UFO SVG (猫画像の代わり) -->
+    <svg id="cat-img" viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="saucer-g" cx="50%" cy="40%">
+          <stop offset="0%" stop-color="#4a1a8a"/>
+          <stop offset="100%" stop-color="#1a0a3d"/>
+        </radialGradient>
+        <radialGradient id="dome-g" cx="40%" cy="35%">
+          <stop offset="0%" stop-color="rgba(0,245,255,.3)"/>
+          <stop offset="100%" stop-color="rgba(10,31,58,.9)"/>
+        </radialGradient>
+        <filter id="glow-f"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <radialGradient id="beam-g" cx="50%" cy="0%">
+          <stop offset="0%" stop-color="rgba(0,245,255,.7)"/>
+          <stop offset="100%" stop-color="rgba(0,245,255,0)"/>
+        </radialGradient>
+      </defs>
+
+      <!-- ビーム（タイマー動作中に表示） -->
+      <g id="ufo-beam" opacity="0">
+        <ellipse cx="150" cy="195" rx="38" ry="10" fill="rgba(0,245,255,.08)"/>
+        <path d="M128,138 L112,250 L188,250 L172,138 Z" fill="url(#beam-g)" opacity=".6"/>
+        <line x1="150" y1="138" x2="150" y2="250" stroke="rgba(0,245,255,.5)" stroke-width="2"/>
+      </g>
+
+      <!-- ソーサー本体 -->
+      <ellipse cx="150" cy="150" rx="100" ry="25" fill="url(#saucer-g)"/>
+      <!-- リム -->
+      <ellipse cx="150" cy="152" rx="100" ry="25" fill="none" stroke="rgba(0,245,255,.55)" stroke-width="1.5"/>
+      <!-- リムライト -->
+      <circle cx="68"  cy="152" r="4.5" fill="rgba(0,245,255,.9)"  filter="url(#glow-f)"/>
+      <circle cx="95"  cy="158" r="3.5" fill="rgba(255,0,110,.9)"  filter="url(#glow-f)"/>
+      <circle cx="150" cy="160" r="4.5" fill="rgba(255,214,10,.9)" filter="url(#glow-f)"/>
+      <circle cx="205" cy="158" r="3.5" fill="rgba(0,245,255,.9)"  filter="url(#glow-f)"/>
+      <circle cx="232" cy="152" r="4.5" fill="rgba(255,0,110,.9)"  filter="url(#glow-f)"/>
+
+      <!-- ドーム -->
+      <ellipse cx="150" cy="128" rx="44" ry="27" fill="rgba(10,31,58,.9)"/>
+      <ellipse cx="150" cy="128" rx="44" ry="27" fill="url(#dome-g)"/>
+      <ellipse cx="150" cy="128" rx="44" ry="27" fill="none" stroke="rgba(0,245,255,.45)" stroke-width="1"/>
+      <!-- ドーム反射 -->
+      <ellipse cx="136" cy="118" rx="11" ry="6" fill="rgba(0,245,255,.18)" transform="rotate(-25 136 118)"/>
+
+      <!-- エイリアン顔 -->
+      <circle cx="138" cy="130" r="6" fill="rgba(0,245,255,.65)" filter="url(#glow-f)"/>
+      <circle cx="162" cy="130" r="6" fill="rgba(0,245,255,.65)" filter="url(#glow-f)"/>
+      <path d="M134,138 Q150,146 166,138" stroke="rgba(0,245,255,.55)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+      <!-- アンテナ -->
+      <line x1="150" y1="101" x2="150" y2="83"  stroke="rgba(0,245,255,.7)" stroke-width="2"/>
+      <circle cx="150" cy="79" r="5.5" fill="rgba(0,245,255,.95)" filter="url(#glow-f)"/>
+
+      <!-- エンジングロー -->
+      <ellipse cx="150" cy="175" rx="70" ry="10" fill="rgba(157,78,221,.2)" filter="url(#glow-f)"/>
+    </svg>
+  </div>
+
+  <div id="timer-section">
+    <div id="timer-display">
+      <div class="digit-group">
+        <button class="adj-btn" onclick="adj('h',1)">+</button>
+        <div class="digits-row">
+          <span class="digit dim" id="d-h10">0</span>
+          <span class="digit dim" id="d-h1">0</span>
+        </div>
+        <button class="adj-btn" onclick="adj('h',-1)">-</button>
+      </div>
+      <span class="colon">:</span>
+      <div class="digit-group">
+        <button class="adj-btn" onclick="adj('m',1)">+</button>
+        <div class="digits-row">
+          <span class="digit" id="d-m10">0</span>
+          <span class="digit" id="d-m1">0</span>
+        </div>
+        <button class="adj-btn" onclick="adj('m',-1)">-</button>
+      </div>
+      <span class="colon">:</span>
+      <div class="digit-group">
+        <button class="adj-btn" onclick="adj('s',1)">+</button>
+        <div class="digits-row">
+          <span class="digit" id="d-s10">0</span>
+          <span class="digit" id="d-s1">0</span>
+        </div>
+        <button class="adj-btn" onclick="adj('s',-1)">-</button>
+      </div>
+    </div>
+    <div id="unit-labels">
+      <span class="unit-label">HH</span>
+      <span class="unit-sep"></span>
+      <span class="unit-label">MM</span>
+      <span class="unit-sep"></span>
+      <span class="unit-label">SS</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM PANEL -->
+<div id="bottom-panel">
+  <div id="controls">
+    <button class="ctrl-btn" id="clear-btn"  onclick="clearTimer()">✕ CLEAR</button>
+    <button class="ctrl-btn" id="start-btn"  onclick="startTimer()">▶ START</button>
+    <button class="ctrl-btn" id="pause-btn"  onclick="pauseTimer()">⏸ PAUSE</button>
+    <button class="ctrl-btn" id="reset-btn"  onclick="resetTimer()">↺ RESET</button>
+  </div>
+  <div id="presets">
+    <button class="preset-btn" onclick="setPreset(30)">30s</button>
+    <button class="preset-btn" onclick="setPreset(60)">1m</button>
+    <button class="preset-btn" onclick="setPreset(120)">2m</button>
+    <button class="preset-btn" onclick="setPreset(180)">3m</button>
+    <button class="preset-btn" onclick="setPreset(300)">5m</button>
+    <button class="preset-btn" onclick="setPreset(600)">10m</button>
+    <div id="custom-input-wrap">
+      <input id="custom-input" type="number" min="1" max="599" placeholder="min" />
+      <span id="custom-label">min</span>
+      <button id="custom-set-btn" onclick="applyCustom()">SET</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div id="overlay">
+  <!-- オーバーレイ UFO -->
+  <svg id="overlay-cat" viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="ov-sg" cx="50%" cy="40%"><stop offset="0%" stop-color="#4a1a8a"/><stop offset="100%" stop-color="#1a0a3d"/></radialGradient>
+      <radialGradient id="ov-dg" cx="40%" cy="35%"><stop offset="0%" stop-color="rgba(0,245,255,.35)"/><stop offset="100%" stop-color="rgba(10,31,58,.9)"/></radialGradient>
+      <filter id="ov-gf"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <ellipse cx="150" cy="150" rx="100" ry="25" fill="url(#ov-sg)"/>
+    <ellipse cx="150" cy="152" rx="100" ry="25" fill="none" stroke="rgba(0,245,255,.7)" stroke-width="2"/>
+    <circle cx="68"  cy="152" r="4.5" fill="rgba(0,245,255,.9)"  filter="url(#ov-gf)"/>
+    <circle cx="95"  cy="158" r="3.5" fill="rgba(255,0,110,.9)"  filter="url(#ov-gf)"/>
+    <circle cx="150" cy="160" r="4.5" fill="rgba(255,214,10,.9)" filter="url(#ov-gf)"/>
+    <circle cx="205" cy="158" r="3.5" fill="rgba(0,245,255,.9)"  filter="url(#ov-gf)"/>
+    <circle cx="232" cy="152" r="4.5" fill="rgba(255,0,110,.9)"  filter="url(#ov-gf)"/>
+    <ellipse cx="150" cy="128" rx="44" ry="27" fill="rgba(10,31,58,.9)"/>
+    <ellipse cx="150" cy="128" rx="44" ry="27" fill="url(#ov-dg)"/>
+    <ellipse cx="150" cy="128" rx="44" ry="27" fill="none" stroke="rgba(0,245,255,.6)" stroke-width="1.5"/>
+    <circle cx="138" cy="130" r="6" fill="rgba(0,245,255,.8)" filter="url(#ov-gf)"/>
+    <circle cx="162" cy="130" r="6" fill="rgba(0,245,255,.8)" filter="url(#ov-gf)"/>
+    <path d="M132,140 Q150,150 168,140" stroke="rgba(0,245,255,.7)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <line x1="150" y1="101" x2="150" y2="83"  stroke="rgba(0,245,255,.7)" stroke-width="2"/>
+    <circle cx="150" cy="79" r="6" fill="rgba(0,245,255,.95)" filter="url(#ov-gf)"/>
+    <ellipse cx="150" cy="175" rx="70" ry="10" fill="rgba(157,78,221,.3)" filter="url(#ov-gf)"/>
+  </svg>
+
+  <div id="overlay-card">
+    <div id="overlay-text">⏰ TIME'S UP!</div>
+    <div id="overlay-sub">Mission Complete 🚀</div>
+  </div>
+  <button id="dismiss-btn" onclick="dismissOverlay()">✓ OK!</button>
+</div>
+
+<script>
+// ── CANVAS STARFIELD ──────────────────────────────────────
+const canvas = document.getElementById('bg-canvas');
+const ctx    = canvas.getContext('2d');
+let W, H, stars = [];
+let warping = false;
+
+function resizeCanvas(){
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+function initStars(){
+  stars = [];
+  for(let i=0;i<200;i++){
+    stars.push({
+      x: Math.random()*W, y: Math.random()*H,
+      r: Math.random()*1.8+.2,
+      a: Math.random(),
+      da: (.002+Math.random()*.006) * (Math.random()<.5?1:-1),
+      col: Math.random()<.12 ? 'rgba(0,245,255,A)' :
+           Math.random()<.1  ? 'rgba(157,78,221,A)' :
+                               'rgba(232,244,255,A)'
+    });
+  }
+}
+function drawFrame(){
+  ctx.clearRect(0,0,W,H);
+  stars.forEach(s=>{
+    s.a = Math.max(.05, Math.min(1, s.a+s.da));
+    if(s.a<=.05||s.a>=1) s.da *= -1;
+    if(warping){
+      const len = Math.random()*60+20;
+      ctx.save();
+      const g = ctx.createLinearGradient(s.x,s.y,s.x+len,s.y);
+      g.addColorStop(0, s.col.replace('A',String(s.a)));
+      g.addColorStop(1,'transparent');
+      ctx.strokeStyle=g; ctx.lineWidth=s.r*1.5;
+      ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x+len,s.y); ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.fillStyle = s.col.replace('A',String(s.a));
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  });
+  requestAnimationFrame(drawFrame);
+}
+function triggerWarp(dur=800){
+  warping = true;
+  const layer = document.getElementById('warp-layer');
+  for(let i=0;i<18;i++){
+    setTimeout(()=>{
+      const l = document.createElement('div');
+      l.className = 'warp-line active';
+      const ang = (Math.random()-.5)*180;
+      l.style.cssText = `transform:rotate(${ang}deg) translateX(${(Math.random()-.5)*200}px) translateY(${(Math.random()-.5)*200}px);width:${80+Math.random()*120}px;`;
+      layer.appendChild(l);
+      setTimeout(()=>l.remove(), 700);
+    }, i*20);
+  }
+  setTimeout(()=>{ warping=false; }, dur);
+}
+function spawnMeteor(){
+  const m = document.createElement('div');
+  m.className = 'meteor';
+  const ang = (Math.random()-.5)*40-15;
+  const sx = Math.random()*W*.4, sy = Math.random()*H*.6;
+  const len = 80+Math.random()*120, dur = .4+Math.random()*.4;
+  m.style.cssText = `left:${sx}px;top:${sy}px;transform:rotate(${ang}deg);--mw:${len}px;--tx:${Math.cos(ang*Math.PI/180)*len}px;--ty:${Math.sin(ang*Math.PI/180)*len}px;--dur:${dur}s;`;
+  document.getElementById('warp-layer').appendChild(m);
+  setTimeout(()=>m.remove(), dur*1000+100);
+}
+function spawnWarpRipple(){
+  const r = document.createElement('div');
+  r.className = 'warp-ripple';
+  document.body.appendChild(r);
+  setTimeout(()=>r.remove(), 1100);
+}
+
+window.addEventListener('resize',()=>{ resizeCanvas(); initStars(); });
+resizeCanvas(); initStars(); drawFrame();
+
+// ── TIMER LOGIC (ねこタイマーと同じ) ──────────────────────
+let remaining = 0, initialTotal = 0, running = false, interval = null;
+
+const dH10 = document.getElementById('d-h10'), dH1 = document.getElementById('d-h1');
+const dM10 = document.getElementById('d-m10'), dM1 = document.getElementById('d-m1');
+const dS10 = document.getElementById('d-s10'), dS1 = document.getElementById('d-s1');
+const ringFill  = document.getElementById('ring-fill');
+const orbitDot  = document.getElementById('orbit-dot');
+const overlay   = document.getElementById('overlay');
+const ufoImg    = document.getElementById('cat-img');
+const ufoBeam   = document.getElementById('ufo-beam');
+
+const R = 94, CIRC = 2*Math.PI*R;
+ringFill.style.strokeDasharray  = CIRC;
+ringFill.style.strokeDashoffset = CIRC;
+
+// 流星タイマー
+let meteorInt = null;
+
+function updateDisplay(secs){
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+  dH10.textContent = Math.floor(h/10); dH1.textContent = h%10;
+  dM10.textContent = Math.floor(m/10); dM1.textContent = m%10;
+  dS10.textContent = Math.floor(s/10); dS1.textContent = s%10;
+  const dim = (h===0);
+  dH10.classList.toggle('dim',dim); dH1.classList.toggle('dim',dim);
+  ringFill.style.strokeDashoffset = initialTotal>0 ? CIRC*(remaining/initialTotal) : CIRC;
+}
+function getSecs(){
+  const h = +dH10.textContent*10 + +dH1.textContent;
+  const m = +dM10.textContent*10 + +dM1.textContent;
+  const s = +dS10.textContent*10 + +dS1.textContent;
+  return h*3600 + m*60 + s;
+}
+function adj(unit, dir){
+  if(running) return;
+  let c = getSecs();
+  if(unit==='h') c += dir*3600;
+  if(unit==='m') c += dir*60;
+  if(unit==='s') c += dir;
+  c = Math.max(0, Math.min(c,35999));
+  remaining = c; initialTotal = c; updateDisplay(c);
+}
+function setPreset(s){
+  if(running) pauseTimer();
+  remaining=s; initialTotal=s; updateDisplay(s);
+  ringFill.style.strokeDashoffset = CIRC;
+}
+function applyCustom(){
+  const val = parseFloat(document.getElementById('custom-input').value);
+  if(!val||val<=0) return;
+  const secs = Math.round(val*60);
+  setPreset(Math.min(secs,35999));
+  document.getElementById('custom-input').value='';
+}
+document.getElementById('custom-input').addEventListener('keydown',e=>{ if(e.key==='Enter') applyCustom(); });
+
+function clearTimer(){
+  if(running) pauseTimer();
+  remaining=0; initialTotal=0; updateDisplay(0);
+  ringFill.style.strokeDashoffset = CIRC;
+  ufoImg.classList.remove('running');
+  ufoBeam.setAttribute('opacity','0');
+  orbitDot.style.display='none';
+  if(meteorInt){ clearInterval(meteorInt); meteorInt=null; }
+}
+function startTimer(){
+  if(remaining<=0) return;
+  running=true;
+  ufoImg.classList.add('running');
+  ufoBeam.setAttribute('opacity','1');
+  orbitDot.style.display='block';
+  // 流星
+  if(!meteorInt) meteorInt = setInterval(spawnMeteor, 300);
+  interval = setInterval(()=>{
+    remaining--;
+    updateDisplay(remaining);
+    animateOrbit();
+    if(remaining<=0){
+      clearInterval(interval); running=false;
+      ufoImg.classList.remove('running');
+      ufoBeam.setAttribute('opacity','0');
+      if(meteorInt){ clearInterval(meteorInt); meteorInt=null; }
+      triggerWarp(1200);
+      spawnWarpRipple();
+      playKazoo();
+      overlay.classList.add('show');
+    }
+  },1000);
+}
+function pauseTimer(){
+  if(!running) return;
+  running=false; clearInterval(interval);
+  ufoImg.classList.remove('running');
+  ufoBeam.setAttribute('opacity','0');
+  if(meteorInt){ clearInterval(meteorInt); meteorInt=null; }
+}
+function resetTimer(){
+  pauseTimer();
+  remaining=initialTotal; updateDisplay(remaining);
+  positionOrbitDot(0); orbitDot.style.display='none';
+  ringFill.style.strokeDashoffset = CIRC;
+}
+function animateOrbit(){
+  positionOrbitDot(initialTotal>0 ? (1-remaining/initialTotal)*360 : 0);
+}
+function positionOrbitDot(deg){
+  const sec = document.getElementById('cat-section');
+  const w=sec.offsetWidth, h=sec.offsetHeight;
+  const r = Math.min(w,h)*0.5;
+  const rad = (deg-90)*Math.PI/180;
+  orbitDot.style.left = (w/2 + r*Math.cos(rad) - 6)+'px';
+  orbitDot.style.top  = (h/2 + r*Math.sin(rad) - 6)+'px';
+}
+
+// ── 効果音 (オリジナルのカズー音を宇宙っぽくアレンジ) ──
+function playKazoo(){
+  try {
+    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    // ファンファーレ：C-E-G-C arpeggio + 宇宙っぽいサイン波
+    [330,415,494,659,784,880].forEach((freq,i)=>{
+      const t = audioCtx.currentTime + i*0.11;
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(.14,t);
+      g.gain.exponentialRampToValueAtTime(.001, t+0.15);
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t); osc.stop(t+0.15);
+    });
+    // スイープ音
+    setTimeout(()=>{
+      const osc2 = audioCtx.createOscillator();
+      osc2.type='sawtooth'; osc2.frequency.value=200;
+      osc2.frequency.linearRampToValueAtTime(800, audioCtx.currentTime+.5);
+      const g2=audioCtx.createGain(); g2.gain.value=.08;
+      g2.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.5);
+      osc2.connect(g2); g2.connect(audioCtx.destination);
+      osc2.start(); osc2.stop(audioCtx.currentTime+.5);
+    },0);
+  } catch(e){}
+}
+
+function dismissOverlay(){
+  overlay.classList.remove('show');
+  clearTimer();
+}
+
+updateDisplay(0); positionOrbitDot(0);
+</script>
+</body>
+</html>
