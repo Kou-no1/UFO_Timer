@@ -575,15 +575,18 @@
   .meteor {
     position: fixed; pointer-events: none; z-index: 2;
     height: 2px; border-radius: 1px;
-    background: linear-gradient(90deg, var(--cyan), transparent);
+    width: var(--mw, 150px);
+    background: linear-gradient(90deg, transparent, var(--cyan) 70%, #fff);
+    box-shadow: 0 0 4px var(--cyan), 0 0 8px var(--cyan);
     animation: meteor-fly var(--dur,.8s) linear forwards;
     opacity: 0;
+    transform-origin: right center;
   }
   @keyframes meteor-fly {
-    0%  { opacity:0; width:0; }
-    10% { opacity:1; }
-    80% { opacity:.8; }
-    100%{ opacity:0; width:var(--mw,150px); transform:translate(var(--tx),var(--ty)); }
+    0%  { opacity:0;  transform:rotate(var(--ang,0deg)) translateX(calc(-1 * var(--len,150px))); }
+    8%  { opacity:1; }
+    80% { opacity:.9; }
+    100%{ opacity:0;  transform:rotate(var(--ang,0deg)) translateX(0px); }
   }
 </style>
 </head>
@@ -1060,9 +1063,14 @@ function spawnMeteor(){
   const m = document.createElement('div');
   m.className = 'meteor';
   const ang = (Math.random()-.5)*40-15;
-  const sx = Math.random()*W*.4, sy = Math.random()*H*.6;
+  // 終点をランダムに設定し、そこから逆算した開始位置に要素を置く
   const len = 80+Math.random()*120, dur = .4+Math.random()*.4;
-  m.style.cssText = `left:${sx}px;top:${sy}px;transform:rotate(${ang}deg);--mw:${len}px;--tx:${Math.cos(ang*Math.PI/180)*len}px;--ty:${Math.sin(ang*Math.PI/180)*len}px;--dur:${dur}s;`;
+  const ex = Math.random()*W*.7 + W*.1;
+  const ey = Math.random()*H*.5 + H*.05;
+  const rad = ang * Math.PI/180;
+  const sx = ex - Math.cos(rad)*len;
+  const sy = ey - Math.sin(rad)*len;
+  m.style.cssText = `left:${sx}px;top:${sy}px;--mw:${len}px;--ang:${ang}deg;--len:${len}px;--dur:${dur}s;`;
   document.getElementById('warp-layer').appendChild(m);
   setTimeout(()=>m.remove(), dur*1000+100);
 }
